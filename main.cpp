@@ -1,12 +1,13 @@
-#include <iostream>
-#include <syncstream>
-#include <mutex>
-#include <thread>
 #include <algorithm>
+#include <cctype>
 #include <chrono>
-#include <shared_mutex>
-#include <condition_variable>
-#include "barriers_and_latches.h"
+#include <future>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <thread>
+#include <vector>
+#include <set>
 
 using namespace std::chrono_literals;
 using namespace std::chrono;
@@ -17,6 +18,6 @@ int counter = 0;
 
 int main(int argc, const char* const argv[]) {
 
-  barriers_and_latches::first_latch_example();
+  
   return 0;
 }

@@ -1,0 +1,85 @@
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <future>
+#include <iostream>
+#include <iterator>
+#include <sstream>
+#include <thread>
+#include <vector>
+#include <set>
+
+using namespace std::chrono_literals;
+using namespace std::chrono;
+
+void canceling_asynchronous_operations() {
+  constexpr int CHECK_PERIOD_MS = 100;
+
+  auto long_running_task = [&](int ms, const std::atomic_bool& cancellation_token)-> bool {
+    while (ms > 0 && !cancellation_token) {
+      ms -= CHECK_PERIOD_MS;
+      std::this_thread::sleep_for(100ms);
+    }
+    return cancellation_token;
+  };
+
+  std::atomic_bool cancellation_token{false};
+  std::cout << "Starting long running tasks..." << std::endl;
+
+  std::packaged_task<bool(int, const std::atomic_bool&)> task1(long_running_task);
+  std::future<bool> result1 = task1.get_future();
+  std::jthread t1(std::move(task1), 500, std::ref(cancellation_token));
+
+  std::packaged_task<bool(int, const std::atomic_bool&)> task2(long_running_task);
+  std::future<bool> result2 = task2.get_future();
+  std::jthread t2(std::move(task2), 1000, std::ref(cancellation_token));
+
+  std::cout << "Cancelling tasks after 600ms" << std::endl;
+  std::this_thread::sleep_for(600ms);
+  cancellation_token = true;
+
+  std::cout << "Task1, waiting for 500ms. Cancelled = " << std::boolalpha << result1.get() << std::endl;
+  std::cout << "Task2, waiting for 1 second. Cancelled = " << std::boolalpha << result2.get() << std::endl;
+}
+
+
+void combineFunctions() {
+  auto combineFunc = [&](std::promise<std::tuple<int, std::string>> combineProm) {
+    try
+    {
+      // Thread to simulate computing a value.
+      std::cout << "Starting computeThread..." << std::endl;
+      auto computeVal = [](std::promise<int> prom) mutable {
+        std::this_thread::sleep_for(1s);
+        prom.set_value(42);
+      };
+      std::promise<int> computeProm;
+      auto computeFut = computeProm.get_future();
+      std::jthread computeThread(computeVal, std::move(computeProm));
+
+      // Thread to simulate downloading a file.
+      std::cout << "Starting dataThread..." << std::endl;
+      auto fetchData = [](std::promise<std::string> prom) mutable {
+        std::this_thread::sleep_for(2s);
+        prom.set_value("data.txt");
+      };
+      std::promise<std::string> fetchProm;
+      auto fetchFut = fetchProm.get_future();
+      std::jthread dataThread(fetchData, std::move(fetchProm));
+      
+      combineProm.set_value({computeFut.get(), fetchFut.get()});
+    }
+    catch(...)
+    {
+      combineProm.set_exception(std::current_exception());
+    }
+    
+  };
+  std::promise<std::tuple<int, std::string>> combineProm;
+  auto combineFuture = combineProm.get_future();
+  std::jthread combineThread(combineFunc, std::move(combineProm));
+
+  auto [data, file] = combineFuture.get();
+  std::cout << "Value :" << data << " " << file << std::endl;
+
+}
