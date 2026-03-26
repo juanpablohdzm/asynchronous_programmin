@@ -11,6 +11,22 @@
 
 using namespace std::chrono_literals;
 using namespace std::chrono;
+using namespace std;
+
+struct SyncStream {
+    static std::mutex& get_mutex() {
+        static std::mutex m;
+        return m;
+    }
+    std::lock_guard<std::mutex> lock;
+    SyncStream(std::ostream& os) : lock(get_mutex()) {}
+    template<typename T>
+    std::ostream& operator<<(const T& msg) {
+        return std::cout << msg;
+    }
+};
+
+#define sync_cout SyncStream(std::cout)
 
 void canceling_asynchronous_operations() {
   constexpr int CHECK_PERIOD_MS = 100;
@@ -82,4 +98,30 @@ void combineFunctions() {
   auto [data, file] = combineFuture.get();
   std::cout << "Value :" << data << " " << file << std::endl;
 
+}
+
+
+void async_first_example() {
+  auto compute = [](unsigned taskId, int x, int y) -> int {
+    std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 200));
+    sync_cout << "Running task " << taskId << std::endl;
+    return std::pow(x, y);
+  };
+
+  vector<future<int>> futVec;
+  for (int i = 0; i <= 10; i++) {
+    futVec.emplace_back(async(compute, i, 2, i));
+  }
+
+  sync_cout << "Waiting in main thread" << endl;
+  std::this_thread::sleep_for(1s);
+
+  vector<int> results;
+  for (auto& fut : futVec) {
+    results.push_back(fut.get());
+  }
+
+  for (auto result : results) {
+    std::cout << result << ' ';
+  }
 }
