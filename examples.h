@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 #include <set>
+#include <semaphore>
 
 using namespace std::chrono_literals;
 using namespace std::chrono;
@@ -124,4 +125,30 @@ void async_first_example() {
   for (auto result : results) {
     std::cout << result << ' ';
   }
+}
+
+void limit_number_of_threads() {
+  auto task = [](int id, std::counting_semaphore<>& sem) {
+    sem.acquire();
+    sync_cout << "Running task " << id << endl;
+    std::this_thread::sleep_for(1s);
+    sem.release();
+  };
+
+  const int total_tasks = 20;
+
+  const int max_concurrent_tasks = std::thread::hardware_concurrency();
+  std::counting_semaphore<> sem(max_concurrent_tasks);
+
+  sync_cout << "Allowing only " << max_concurrent_tasks << " concurrent tasks to run " << total_tasks << " tasks" << endl;
+
+  std::vector<std::future<void>> futures;
+  for (int i = 0; i < total_tasks; i++) {
+    futures.push_back(std::async(std::launch::async, task, i, std::ref(sem)));
+  }
+
+  for (auto& fut : futures) {
+    fut.get();
+  }
+  std::cout << "All tasks completed" << std::endl;
 }
